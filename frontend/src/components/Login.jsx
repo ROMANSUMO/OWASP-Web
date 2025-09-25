@@ -5,11 +5,13 @@ import '../styles/Login.css';
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    username: '',
+    email: '',
     password: ''
   });
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState([]);
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -19,58 +21,35 @@ const Login = () => {
       ...prev,
       [name]: value
     }));
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username or email is required';
-    }
-
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    
+    // Clear errors when user starts typing
+    if (error) setError('');
+    if (validationErrors.length > 0) setValidationErrors([]);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
+    setLoading(true);
+    setError('');
+    setValidationErrors([]);
+
+    console.log('Login form submitted:', formData);
+
+    const result = await login(formData);
+
+    if (result.success) {
+      console.log('Login successful, redirecting to home...');
+      navigate('/home');
+    } else {
+      console.error('Login failed:', result.message);
+      setError(result.message);
+      
+      if (result.errors && result.errors.length > 0) {
+        setValidationErrors(result.errors);
+      }
     }
 
-    setIsLoading(true);
-    
-    try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock authentication logic
-      login({
-        username: formData.username,
-        email: formData.username.includes('@') ? formData.username : `${formData.username}@example.com`
-      });
-      
-      navigate('/home');
-    } catch (error) {
-      console.error('Login error:', error);
-      setErrors({ general: 'Login failed. Please try again.' });
-    } finally {
-      setIsLoading(false);
-    }
+    setLoading(false);
   };
 
   return (
@@ -78,28 +57,37 @@ const Login = () => {
       <form onSubmit={handleSubmit} className="login-form">
         <h2 className="login-title">Login</h2>
         
-        {errors.general && (
+        {error && (
           <div className="error-message" style={{ textAlign: 'center', marginBottom: '20px' }}>
-            {errors.general}
+            {error}
+          </div>
+        )}
+        
+        {validationErrors.length > 0 && (
+          <div className="error-message" style={{ textAlign: 'left', marginBottom: '20px' }}>
+            <ul>
+              {validationErrors.map((error, index) => (
+                <li key={index}>{error.msg}</li>
+              ))}
+            </ul>
           </div>
         )}
 
         <div className="form-group">
-          <label htmlFor="username" className="form-label">
-            Username or Email
+          <label htmlFor="email" className="form-label">
+            Email Address
           </label>
           <input
-            type="text"
-            id="username"
-            name="username"
-            value={formData.username}
+            type="email"
+            id="email"
+            name="email"
+            value={formData.email}
             onChange={handleChange}
-            className={`form-input ${errors.username ? 'error' : ''}`}
-            placeholder="Enter your username or email"
+            className="form-input"
+            placeholder="Enter your email"
+            required
+            disabled={loading}
           />
-          {errors.username && (
-            <span className="error-message">{errors.username}</span>
-          )}
         </div>
 
         <div className="form-group">
@@ -112,20 +100,19 @@ const Login = () => {
             name="password"
             value={formData.password}
             onChange={handleChange}
-            className={`form-input ${errors.password ? 'error' : ''}`}
+            className="form-input"
             placeholder="Enter your password"
+            required
+            disabled={loading}
           />
-          {errors.password && (
-            <span className="error-message">{errors.password}</span>
-          )}
         </div>
 
         <button
           type="submit"
           className="btn"
-          disabled={isLoading}
+          disabled={loading}
         >
-          {isLoading ? 'Logging in...' : 'Login'}
+          {loading ? 'Logging in...' : 'Login'}
         </button>
 
         <div className="login-footer">
@@ -133,6 +120,13 @@ const Login = () => {
           <Link to="/register" className="btn-link">
             Create an account
           </Link>
+        </div>
+        
+        <div className="demo-credentials">
+          <h4>Demo Credentials:</h4>
+          <p><strong>Email:</strong> admin@example.com</p>
+          <p><strong>Password:</strong> password123</p>
+          <p><em>Or use: test@example.com / password123</em></p>
         </div>
       </form>
     </div>

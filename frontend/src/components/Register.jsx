@@ -10,10 +10,28 @@ const Register = () => {
     password: '',
     confirmPassword: ''
   });
+
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  // Email validation helper
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Password validation helper
+  const validatePassword = (password) => {
+    return {
+      minLength: password.length >= 8,
+      hasUppercase: /[A-Z]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasNumber: /\d/.test(password)
+    };
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -21,29 +39,22 @@ const Register = () => {
       ...prev,
       [name]: value
     }));
-    // Clear error when user starts typing
+
+    // Clear specific field error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
         [name]: ''
       }));
     }
-  };
-
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  const validatePassword = (password) => {
-    const requirements = {
-      minLength: password.length >= 8,
-      hasUppercase: /[A-Z]/.test(password),
-      hasLowercase: /[a-z]/.test(password),
-      hasNumber: /\d/.test(password),
-      hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password)
-    };
-    return requirements;
+    
+    // Clear general error
+    if (errors.general) {
+      setErrors(prev => ({
+        ...prev,
+        general: ''
+      }));
+    }
   };
 
   const validateForm = () => {
@@ -91,32 +102,79 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validate form before submission
     if (!validateForm()) {
       return;
     }
 
     setIsLoading(true);
-    
+    setErrors({});
+
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Registration form submitted:', formData);
       
-      // Mock registration logic
-      register({
+      // Call the register function from AuthContext
+      const result = await register({
         username: formData.username,
-        email: formData.email
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword
       });
-      
-      navigate('/home');
+
+      if (result && result.success) {
+        console.log('Registration successful, redirecting to home...');
+        navigate('/home');
+      } else {
+        console.error('Registration failed:', result?.message || 'Unknown error');
+        
+        // Handle different types of errors
+        if (result && result.errors && Array.isArray(result.errors)) {
+          // Backend validation errors (array format)
+          const fieldErrors = {};
+          result.errors.forEach(error => {
+            if (error.field) {
+              fieldErrors[error.field] = error.msg || error.message;
+            }
+          });
+          
+          if (Object.keys(fieldErrors).length > 0) {
+            setErrors(fieldErrors);
+          } else {
+            setErrors({ general: result.message || 'Registration failed. Please try again.' });
+          }
+        } else {
+          // General error message
+          setErrors({ 
+            general: result?.message || 'Registration failed. Please try again.' 
+          });
+        }
+      }
     } catch (error) {
       console.error('Registration error:', error);
-      setErrors({ general: 'Registration failed. Please try again.' });
+      
+      // Handle network or other errors
+      if (error.response) {
+        // API responded with error status
+        const errorMessage = error.response.data?.message || 'Registration failed. Please try again.';
+        setErrors({ general: errorMessage });
+      } else if (error.request) {
+        // Network error
+        setErrors({ general: 'Network error. Please check your connection and try again.' });
+      } else {
+        // Other error
+        setErrors({ general: 'An unexpected error occurred. Please try again.' });
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const passwordReqs = validatePassword(formData.password);
+  const passwordReqs = formData.password ? validatePassword(formData.password) : {
+    minLength: false,
+    hasUppercase: false,
+    hasLowercase: false,
+    hasNumber: false
+  };
 
   return (
     <div className="register-container">
@@ -141,6 +199,8 @@ const Register = () => {
             onChange={handleChange}
             className={`form-input ${errors.username ? 'error' : ''}`}
             placeholder="Enter your username"
+            disabled={isLoading}
+            required
           />
           {errors.username && (
             <span className="error-message">{errors.username}</span>
@@ -149,7 +209,7 @@ const Register = () => {
 
         <div className="form-group">
           <label htmlFor="email" className="form-label">
-            Email
+            Email Address
           </label>
           <input
             type="email"
@@ -159,6 +219,8 @@ const Register = () => {
             onChange={handleChange}
             className={`form-input ${errors.email ? 'error' : ''}`}
             placeholder="Enter your email"
+            disabled={isLoading}
+            required
           />
           {errors.email && (
             <span className="error-message">{errors.email}</span>
@@ -177,7 +239,11 @@ const Register = () => {
             onChange={handleChange}
             className={`form-input ${errors.password ? 'error' : ''}`}
             placeholder="Enter your password"
+            disabled={isLoading}
+            required
           />
+          
+          {/* Password requirements indicator */}
           {formData.password && (
             <div className="password-requirements">
               <ul>
@@ -196,6 +262,7 @@ const Register = () => {
               </ul>
             </div>
           )}
+          
           {errors.password && (
             <span className="error-message">{errors.password}</span>
           )}
@@ -213,6 +280,8 @@ const Register = () => {
             onChange={handleChange}
             className={`form-input ${errors.confirmPassword ? 'error' : ''}`}
             placeholder="Confirm your password"
+            disabled={isLoading}
+            required
           />
           {errors.confirmPassword && (
             <span className="error-message">{errors.confirmPassword}</span>
