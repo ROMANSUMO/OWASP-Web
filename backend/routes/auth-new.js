@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const database = require('../database/db-new');
 const { requireAuth, requireGuest } = require('../middleware/auth');
+const { securityLogger } = require('../middleware/logger');
 
 const router = express.Router();
 
@@ -50,12 +51,26 @@ router.post('/register', requireGuest, validateRegistration, async (req, res) =>
         username: req.body.username, 
         email: req.body.email 
     });
+    
+    securityLogger.logAuth('REGISTRATION_ATTEMPT', {
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        email: req.body.email,
+        username: req.body.username
+    });
 
     try {
         // Check for validation errors
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             console.log('❌ Registration validation errors:', errors.array());
+            securityLogger.logAuth('REGISTRATION_FAILED', {
+                ip: req.ip,
+                userAgent: req.get('User-Agent'),
+                email: req.body.email,
+                success: false,
+                reason: 'Validation errors'
+            });
             return res.status(400).json({
                 status: 'error',
                 message: 'Validation failed',
@@ -69,6 +84,13 @@ router.post('/register', requireGuest, validateRegistration, async (req, res) =>
         const existingUser = await database.checkUserExists(username, email);
         if (existingUser) {
             console.log('❌ User already exists:', { username, email });
+            securityLogger.logAuth('REGISTRATION_FAILED', {
+                ip: req.ip,
+                userAgent: req.get('User-Agent'),
+                email,
+                success: false,
+                reason: 'User already exists'
+            });
             return res.status(409).json({
                 status: 'error',
                 message: 'Username or email already exists',
@@ -81,6 +103,14 @@ router.post('/register', requireGuest, validateRegistration, async (req, res) =>
         const userId = await database.createUser(username, email, hashedPassword);
 
         console.log('✅ User registered successfully:', { userId, username, email });
+        
+        securityLogger.logAuth('REGISTRATION_SUCCESS', {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            email,
+            success: true,
+            userId
+        });
         
         // Create session for the new user
         req.session.userId = userId;
@@ -101,6 +131,13 @@ router.post('/register', requireGuest, validateRegistration, async (req, res) =>
 
     } catch (error) {
         console.error('❌ Registration error:', error);
+        securityLogger.logAuth('REGISTRATION_ERROR', {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            email: req.body.email,
+            success: false,
+            reason: 'Server error'
+        });
         res.status(500).json({
             status: 'error',
             message: 'Server error occurred during registration',
@@ -112,6 +149,12 @@ router.post('/register', requireGuest, validateRegistration, async (req, res) =>
 // POST /api/login - User authentication
 router.post('/login', requireGuest, validateLogin, async (req, res) => {
     console.log('🔐 Login attempt for email:', req.body.email);
+    
+    securityLogger.logAuth('LOGIN_ATTEMPT', {
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        email: req.body.email
+    });
 
     try {
         // Check for validation errors
@@ -131,6 +174,13 @@ router.post('/login', requireGuest, validateLogin, async (req, res) => {
         const user = await database.getUserByEmail(email);
         if (!user) {
             console.log('❌ Login failed: User not found for email:', email);
+            securityLogger.logAuth('LOGIN_FAILED', {
+                ip: req.ip,
+                userAgent: req.get('User-Agent'),
+                email,
+                success: false,
+                reason: 'User not found'
+            });
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid email or password',
@@ -142,6 +192,13 @@ router.post('/login', requireGuest, validateLogin, async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             console.log('❌ Login failed: Invalid password for email:', email);
+            securityLogger.logAuth('LOGIN_FAILED', {
+                ip: req.ip,
+                userAgent: req.get('User-Agent'),
+                email,
+                success: false,
+                reason: 'Invalid password'
+            });
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid email or password',
@@ -158,6 +215,14 @@ router.post('/login', requireGuest, validateLogin, async (req, res) => {
             id: user.id, 
             username: user.username, 
             email: user.email 
+        });
+        
+        securityLogger.logAuth('LOGIN_SUCCESS', {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            email,
+            success: true,
+            userId: user.id
         });
 
         res.status(200).json({

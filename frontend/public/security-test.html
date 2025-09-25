@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Testing Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .test-section h3 { color: #d9534f; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        textarea, input { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ccc; border-radius: 3px; }
+        .result { background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🔒 Security Testing Dashboard</h1>
+    <p>Use this page to test various security features implemented in the OWASP-Web application.</p>
+    
+    <div class="test-section">
+        <h3>1. XSS Protection Test</h3>
+        <p>Test if malicious scripts get sanitized:</p>
+        <textarea id="xssInput" placeholder="Try: &lt;script&gt;alert('XSS')&lt;/script&gt;testuser">&lt;script&gt;alert('XSS')&lt;/script&gt;testuser</textarea>
+        <button onclick="testXSS()">Test XSS Protection</button>
+        <div id="xssResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Rate Limiting Test</h3>
+        <p>Test rate limiting on login endpoint:</p>
+        <input type="email" id="testEmail" value="test@test.com" placeholder="Email">
+        <input type="password" id="testPassword" value="wrongpassword" placeholder="Wrong password">
+        <button onclick="testRateLimit()">Spam Login Requests (Test Rate Limit)</button>
+        <div id="rateLimitResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. CSRF Protection Test</h3>
+        <p>Test CSRF token validation:</p>
+        <button onclick="testCSRF(true)">Valid CSRF Request</button>
+        <button onclick="testCSRF(false)">Invalid CSRF Request</button>
+        <div id="csrfResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. Security Headers Test</h3>
+        <p>Check if security headers are present:</p>
+        <button onclick="testHeaders()">Check Security Headers</button>
+        <div id="headersResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>5. Password Strength Test</h3>
+        <p>Test password validation:</p>
+        <input type="password" id="passwordTest" placeholder="Enter password to test">
+        <button onclick="testPassword()">Test Password Strength</button>
+        <div id="passwordResult" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>6. Security Logs</h3>
+        <p>View recent security events (stored locally):</p>
+        <button onclick="viewLogs()">View Security Logs</button>
+        <div id="logsResult" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        let csrfToken = null;
+
+        // Get CSRF token
+        async function getCSRFToken() {
+            try {
+                const response = await fetch(`${API_BASE}/csrf-token`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                csrfToken = data.data?.csrfToken;
+                return csrfToken;
+            } catch (error) {
+                console.error('Failed to get CSRF token:', error);
+                return null;
+            }
+        }
+
+        // Test XSS Protection
+        async function testXSS() {
+            const input = document.getElementById('xssInput').value;
+            const resultDiv = document.getElementById('xssResult');
+            
+            try {
+                const token = await getCSRFToken();
+                const response = await fetch(`${API_BASE}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': token
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        username: input,
+                        email: 'xsstest@test.com',
+                        password: 'Password123',
+                        confirmPassword: 'Password123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (input.includes('<script>') && !data.message.includes('<script>')) {
+                    resultDiv.innerHTML = `<div class="success">✅ XSS Protection Working! Script tags were sanitized.</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ XSS Protection may not be working properly.</div>`;
+                }
+                
+                resultDiv.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Test Rate Limiting
+        async function testRateLimit() {
+            const email = document.getElementById('testEmail').value;
+            const password = document.getElementById('testPassword').value;
+            const resultDiv = document.getElementById('rateLimitResult');
+            
+            resultDiv.innerHTML = '<div>Testing rate limiting... Making 6 rapid requests...</div>';
+            
+            let blockedCount = 0;
+            
+            for (let i = 1; i <= 6; i++) {
+                try {
+                    const token = await getCSRFToken();
+                    const response = await fetch(`${API_BASE}/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': token
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ email, password })
+                    });
+                    
+                    if (response.status === 429) {
+                        blockedCount++;
+                        resultDiv.innerHTML += `<div>Request ${i}: ⛔ Rate limited (429)</div>`;
+                    } else {
+                        resultDiv.innerHTML += `<div>Request ${i}: ✅ Allowed (${response.status})</div>`;
+                    }
+                    
+                    // Small delay between requests
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                } catch (error) {
+                    resultDiv.innerHTML += `<div>Request ${i}: ❌ Error: ${error.message}</div>`;
+                }
+            }
+            
+            if (blockedCount > 0) {
+                resultDiv.innerHTML += `<div class="success">✅ Rate limiting is working! ${blockedCount} requests were blocked.</div>`;
+            } else {
+                resultDiv.innerHTML += `<div class="error">❌ Rate limiting may not be configured properly.</div>`;
+            }
+        }
+
+        // Test CSRF Protection
+        async function testCSRF(useValidToken) {
+            const resultDiv = document.getElementById('csrfResult');
+            
+            try {
+                const token = useValidToken ? await getCSRFToken() : 'invalid-token';
+                
+                const response = await fetch(`${API_BASE}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': token
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        username: 'csrftest',
+                        email: 'csrf@test.com',
+                        password: 'Password123',
+                        confirmPassword: 'Password123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (useValidToken) {
+                    if (response.status !== 403) {
+                        resultDiv.innerHTML = `<div class="success">✅ Valid CSRF token accepted</div>`;
+                    } else {
+                        resultDiv.innerHTML = `<div class="error">❌ Valid CSRF token was rejected</div>`;
+                    }
+                } else {
+                    if (response.status === 403) {
+                        resultDiv.innerHTML = `<div class="success">✅ CSRF Protection Working! Invalid token was rejected.</div>`;
+                    } else {
+                        resultDiv.innerHTML = `<div class="error">❌ CSRF Protection not working. Invalid token was accepted.</div>`;
+                    }
+                }
+                
+                resultDiv.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Test Security Headers
+        async function testHeaders() {
+            const resultDiv = document.getElementById('headersResult');
+            
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                
+                const headers = {};
+                for (const [key, value] of response.headers.entries()) {
+                    headers[key] = value;
+                }
+                
+                const securityHeaders = [
+                    'content-security-policy',
+                    'x-frame-options',
+                    'x-content-type-options',
+                    'strict-transport-security'
+                ];
+                
+                let headerResults = '<h4>Security Headers Check:</h4>';
+                
+                securityHeaders.forEach(header => {
+                    if (headers[header]) {
+                        headerResults += `<div class="success">✅ ${header}: ${headers[header]}</div>`;
+                    } else {
+                        headerResults += `<div class="error">❌ ${header}: Not present</div>`;
+                    }
+                });
+                
+                if (!headers['x-powered-by']) {
+                    headerResults += `<div class="success">✅ x-powered-by: Hidden (good!)</div>`;
+                } else {
+                    headerResults += `<div class="error">❌ x-powered-by: ${headers['x-powered-by']} (should be hidden)</div>`;
+                }
+                
+                resultDiv.innerHTML = headerResults;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        // Test Password Strength
+        function testPassword() {
+            const password = document.getElementById('passwordTest').value;
+            const resultDiv = document.getElementById('passwordResult');
+            
+            const checks = {
+                minLength: password.length >= 8,
+                hasUppercase: /[A-Z]/.test(password),
+                hasLowercase: /[a-z]/.test(password),
+                hasNumber: /\d/.test(password),
+                hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+            };
+            
+            let score = Object.values(checks).filter(Boolean).length;
+            let strength = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'][score] || 'Very Weak';
+            
+            let result = `<h4>Password Strength: ${strength} (${score}/5)</h4>`;
+            
+            Object.entries(checks).forEach(([check, passed]) => {
+                const checkName = {
+                    minLength: 'At least 8 characters',
+                    hasUppercase: 'Contains uppercase letter',
+                    hasLowercase: 'Contains lowercase letter', 
+                    hasNumber: 'Contains number',
+                    hasSpecial: 'Contains special character'
+                }[check];
+                
+                result += `<div class="${passed ? 'success' : 'error'}">${passed ? '✅' : '❌'} ${checkName}</div>`;
+            });
+            
+            resultDiv.innerHTML = result;
+        }
+
+        // View Security Logs
+        function viewLogs() {
+            const resultDiv = document.getElementById('logsResult');
+            
+            try {
+                const logs = JSON.parse(localStorage.getItem('security_logs') || '[]');
+                
+                if (logs.length === 0) {
+                    resultDiv.innerHTML = '<div>No security logs found. Perform some actions first.</div>';
+                    return;
+                }
+                
+                let logHtml = '<h4>Recent Security Events:</h4>';
+                logs.slice(-10).reverse().forEach(log => {
+                    logHtml += `<div style="margin: 5px 0; padding: 5px; background: #f8f9fa; border-left: 3px solid #007bff;">
+                        <strong>${log.event}</strong> - ${new Date(log.timestamp).toLocaleString()}<br>
+                        <small>${JSON.stringify(log.details)}</small>
+                    </div>`;
+                });
+                
+                resultDiv.innerHTML = logHtml;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error reading logs: ${error.message}</div>`;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            getCSRFToken();
+        });
+    </script>
+</body>
+</html>

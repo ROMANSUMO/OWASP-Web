@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import securityUtils from '../lib/security';
 import '../styles/Login.css';
 
 const Login = () => {
@@ -12,6 +13,7 @@ const Login = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState([]);
+  const [rateLimitInfo, setRateLimitInfo] = useState(null);
 
   const { login, isAuthenticated, loading: authLoading, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -26,32 +28,65 @@ const Login = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Sanitize input
+    const sanitizedValue = securityUtils.sanitizeInput(value);
+    
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: sanitizedValue
     }));
     
     // Clear errors when user starts typing
     if (error) setError('');
     if (validationErrors.length > 0) setValidationErrors([]);
+    if (rateLimitInfo && !rateLimitInfo.allowed) setRateLimitInfo(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Check rate limiting
+    const rateCheck = securityUtils.checkRateLimit('login', 5, 15 * 60 * 1000);
+    if (!rateCheck.allowed) {
+      setRateLimitInfo(rateCheck);
+      setError(`Too many login attempts. Please wait ${Math.ceil(rateCheck.waitTime / 60)} minutes.`);
+      securityUtils.logSecurityEvent('RATE_LIMIT_EXCEEDED', { action: 'login' });
+      return;
+    }
+    
+    // Validate form
+    const validation = securityUtils.validateForm(formData, {
+      email: { required: true, email: true },
+      password: { required: true, minLength: 1 }
+    });
+    
+    if (!validation.isValid) {
+      setValidationErrors(Object.values(validation.errors).map(error => ({ msg: error })));
+      return;
+    }
+    
     setLoading(true);
     setError('');
     setValidationErrors([]);
 
-    console.log('Login form submitted:', formData);
+    console.log('Login form submitted:', { email: formData.email });
+    securityUtils.logSecurityEvent('LOGIN_ATTEMPT', { email: formData.email });
 
     const result = await login(formData);
 
     if (result.success) {
       console.log('Login successful! Auth state will update and redirect automatically.');
+      securityUtils.logSecurityEvent('LOGIN_SUCCESS', { email: formData.email });
+      securityUtils.clearRateLimit('login'); // Clear rate limit on success
       // The useEffect will handle redirection when isAuthenticated becomes true
     } else {
       console.error('Login failed:', result.message);
       setError(result.message);
+      securityUtils.logSecurityEvent('LOGIN_FAILED', { 
+        email: formData.email, 
+        reason: result.message 
+      });
       
       if (result.errors && result.errors.length > 0) {
         setValidationErrors(result.errors);
@@ -85,6 +120,12 @@ const Login = () => {
     <div className="login-container">
       <form onSubmit={handleSubmit} className="login-form">
         <h2 className="login-title">Login</h2>
+        
+        {rateLimitInfo && !rateLimitInfo.allowed && (
+          <div className="error-message" style={{ textAlign: 'center', marginBottom: '20px' }}>
+            ⚠️ Rate limit exceeded. Please wait {Math.ceil(rateLimitInfo.waitTime / 60)} minutes before trying again.
+          </div>
+        )}
         
         {error && (
           <div className="error-message" style={{ textAlign: 'center', marginBottom: '20px' }}>
