@@ -21,19 +21,16 @@ const {
 const { logger, requestLogger, errorLogger } = require('./middleware/logger');
 const { addCSRFToken, verifyCSRFToken, getCSRFToken } = require('./middleware/csrf');
 
-// Import routes (both legacy and Supabase)
-const authRoutes = require('./routes/auth-new'); // Legacy routes
-const supabaseAuthRoutes = require('./routes/supabase-auth'); // New Supabase routes
+// Import Supabase routes
+const supabaseAuthRoutes = require('./routes/supabase-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Configure Winston logger
-logger.info('🚀 Starting WebSecurity Backend Server...');
-logger.info('🔄 Migration Mode: Supporting both legacy and Supabase authentication');
+logger.info('🚀 Starting WebSecurity Backend Server with Supabase...');
 
-console.log('🚀 Starting WebSecurity Backend Server...');
-console.log('🔄 Migration Mode: Supporting both legacy and Supabase authentication');
+console.log('🚀 Starting WebSecurity Backend Server with Supabase...');
 
 // Validate Supabase configuration
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
@@ -130,8 +127,7 @@ app.use('/api/logout', authLimiter); // Rate limit logout attempts
 // Apply CSRF protection to state-changing operations
 app.use(['/api/register', '/api/login', '/api/logout'], verifyCSRFToken);
 
-app.use('/api', authRoutes); // Legacy authentication routes
-app.use('/api', supabaseAuthRoutes); // New Supabase authentication routes
+app.use('/api', supabaseAuthRoutes); // Supabase authentication routes
 
 // 404 handler for unknown routes
 app.use('/api/*', (req, res) => {
@@ -181,28 +177,11 @@ app.use((err, req, res, next) => {
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down server gracefully...');
-    
-    // Close database connection (if using legacy database)
-    try {
-        const database = require('./database/db-new');
-        database.close();
-    } catch (error) {
-        console.log('   No legacy database connection to close');
-    }
-    
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
     console.log('🛑 SIGTERM received, shutting down gracefully...');
-    
-    try {
-        const database = require('./database/db-new');
-        database.close();
-    } catch (error) {
-        console.log('   No legacy database connection to close');
-    }
-    
     process.exit(0);
 });
 
@@ -214,22 +193,17 @@ app.listen(PORT, () => {
     console.log('📊 API endpoints available:');
     console.log('   GET  /api/health           - Health check');
     console.log('   GET  /api/supabase-health  - Supabase connection check');
-    console.log('   ');
-    console.log('   📡 Legacy Authentication Routes:');
-    console.log('   POST /api/register         - User registration (legacy)');
-    console.log('   POST /api/login            - User login (legacy)');
-    console.log('   GET  /api/user             - Get user info (legacy)');
-    console.log('   POST /api/logout           - User logout (legacy)');
+    console.log('   GET  /api/csrf-token       - CSRF token retrieval');
     console.log('   ');
     console.log('   🔗 Supabase Authentication Routes:');
-    console.log('   POST /api/register         - User registration (Supabase)');
-    console.log('   POST /api/login            - User login (Supabase)');
-    console.log('   GET  /api/user             - Get user info (Supabase)');
-    console.log('   PUT  /api/profile          - Update user profile (Supabase)');
-    console.log('   POST /api/logout           - User logout (Supabase)');
+    console.log('   POST /api/register         - User registration');
+    console.log('   POST /api/login            - User login');
+    console.log('   GET  /api/user             - Get user info');
+    console.log('   PUT  /api/profile          - Update user profile');
+    console.log('   POST /api/logout           - User logout');
     console.log('   ');
     console.log('🔥 Server ready for connections!');
-    console.log('💡 Frontend should use Supabase client directly - backend is for additional API needs');
+    console.log('💡 All authentication powered by Supabase - secure cloud backend!');
 });
 
 module.exports = app;

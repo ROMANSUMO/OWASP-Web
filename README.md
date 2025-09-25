@@ -1,15 +1,26 @@
-# WebSecurity - React Frontend Application
+# WebSecurity - Full-Stack OWASP Security Application
 
-A modern, responsive React frontend application with authentication, routing, and a clean user interface. This project demonstrates a complete web application structure with login/register functionality, protected routes, and a dashboard interface.
+A modern, secure full-stack web application demonstrating OWASP security best practices with Supabase authentication. This project showcases enterprise-level security implementations including authentication, authorization, input sanitization, CSRF protection, and comprehensive security monitoring.
 
 ## Features
 
-### 🔐 Authentication System
-- User registration with form validation
-- User login with mock authentication
-- Protected routes that require authentication
-- Context-based state management for user sessions
-- Automatic redirect handling based on authentication status
+### 🔐 Authentication System (Supabase-Powered)
+- Secure user registration with email verification
+- JWT-based authentication with Supabase Auth
+- Google OAuth integration for social login
+- Password strength validation and security requirements
+- Protected routes with automatic session management
+- Profile management and user data synchronization
+
+### 🛡️ Security Features
+- **OWASP Compliance**: Follows OWASP Top 10 security guidelines
+- **Input Sanitization**: XSS protection with DOMPurify and XSS library
+- **CSRF Protection**: Custom token-based CSRF implementation
+- **Rate Limiting**: Multi-tier rate limiting (general, auth, registration)
+- **Security Headers**: Comprehensive Helmet.js configuration
+- **SQL Injection Prevention**: Parameterized queries via Supabase
+- **Session Security**: Secure cookie configuration and session management
+- **Content Security Policy**: Strict CSP headers for XSS prevention
 
 ### 🧭 Navigation & Routing
 - React Router for single-page application navigation
