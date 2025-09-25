@@ -1,15 +1,16 @@
 # WebSecurity - React Frontend Application
 
-A modern, responsive React frontend application with authentication, routing, and a clean user interface. This project demonstrates a complete web application structure with login/register functionality, protected routes, and a dashboard interface.
+A modern, responsive React frontend application with Supabase authentication, routing, and a clean user interface. This project demonstrates a complete web application structure with secure login/register functionality, protected routes, and a dashboard interface.
 
 ## Features
 
-### 🔐 Authentication System
-- User registration with form validation
-- User login with mock authentication
+### 🔐 Authentication System (Supabase-Powered)
+- User registration with email verification
+- Secure JWT-based authentication
 - Protected routes that require authentication
 - Context-based state management for user sessions
 - Automatic redirect handling based on authentication status
+- Real-time session management with Supabase
 
 ### 🧭 Navigation & Routing
 - React Router for single-page application navigation

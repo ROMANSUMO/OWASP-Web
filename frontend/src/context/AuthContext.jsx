@@ -48,10 +48,18 @@ export const AuthProvider = ({ children }) => {
             async (event, session) => {
                 console.log('Auth state change:', event, session);
                 
-                if (session) {
+                if (event === 'SIGNED_IN' && session) {
                     setUser(session.user);
                     setIsAuthenticated(true);
                     // Fetch user profile data when user signs in
+                    await fetchUserProfile(session.user.id);
+                } else if (event === 'SIGNED_OUT') {
+                    setUser(null);
+                    setIsAuthenticated(false);
+                } else if (session) {
+                    setUser(session.user);
+                    setIsAuthenticated(true);
+                    // Fetch user profile data for existing session
                     await fetchUserProfile(session.user.id);
                 } else {
                     setUser(null);
@@ -237,6 +245,35 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Google Sign-in
+    const signInWithGoogle = async () => {
+        try {
+            console.log('Google sign-in attempt');
+            
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/home`
+                }
+            });
+
+            if (error) {
+                console.error('Google sign-in error:', error);
+                return { 
+                    success: false, 
+                    message: error.message,
+                    error: error
+                };
+            }
+
+            // OAuth redirects to Google, so we won't get here immediately
+            return { success: true, message: 'Redirecting to Google...' };
+        } catch (error) {
+            console.error('Google sign-in exception:', error);
+            return { success: false, message: 'Failed to initiate Google sign-in' };
+        }
+    };
+
     const logout = async () => {
         try {
             console.log('Logout attempt');
@@ -285,11 +322,44 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const loginWithGoogle = async () => {
+        try {
+            console.log('Google login attempt');
+            
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/home`
+                }
+            });
+
+            if (error) {
+                console.error('Google login error:', error);
+                return { 
+                    success: false, 
+                    message: error.message,
+                    error: error
+                };
+            }
+
+            // OAuth redirects to Google, so we won't get here immediately
+            return { 
+                success: true, 
+                message: 'Redirecting to Google...',
+                redirecting: true
+            };
+        } catch (error) {
+            console.error('Google login exception:', error);
+            return { success: false, message: AUTH_ERRORS.NETWORK_ERROR };
+        }
+    };
+
     const value = {
         isAuthenticated,
         user,
         loading,
         login,
+        loginWithGoogle,
         register,
         logout,
         updateProfile,

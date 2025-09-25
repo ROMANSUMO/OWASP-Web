@@ -75,8 +75,9 @@ const registerLimiter = createRateLimit(
 const speedLimiter = slowDown({
     windowMs: 15 * 60 * 1000, // 15 minutes
     delayAfter: 2, // allow 2 requests per windowMs without delay
-    delayMs: 500, // add 500ms delay per request after delayAfter
+    delayMs: () => 500, // add 500ms delay per request after delayAfter
     maxDelayMs: 20000, // maximum delay of 20 seconds
+    validate: { delayMs: false }, // Disable the warning
     handler: (req, res, next) => {
         console.log(`🐌 Slow down applied for IP: ${req.ip} on ${req.originalUrl}`);
         next();

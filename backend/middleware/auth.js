@@ -1,4 +1,6 @@
-// Authentication middleware to protect routes
+// Session-based authentication middleware
+// Note: This is kept for compatibility with any session-based endpoints that might still exist
+// Primary authentication should use Supabase JWT authentication via supabase-auth middleware
 
 const requireAuth = (req, res, next) => {
     console.log('🔐 Auth middleware - Session:', req.session);
@@ -29,7 +31,7 @@ const requireGuest = (req, res, next) => {
     return next();
 };
 
-// Middleware to get current user info
+// Middleware to get current user info from session
 const getCurrentUser = (req, res, next) => {
     if (req.session && req.session.userId) {
         req.currentUser = {

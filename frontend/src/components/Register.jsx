@@ -14,7 +14,7 @@ const Register = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   
-  const { register, isAuthenticated, loading: authLoading } = useAuth();
+  const { register, loginWithGoogle, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // Redirect to home if already authenticated
@@ -189,6 +189,22 @@ const Register = () => {
     }
   };
 
+  const handleGoogleSignup = async () => {
+    console.log('Google signup initiated');
+    setIsLoading(true);
+    
+    const result = await loginWithGoogle();
+    
+    if (result.success) {
+      console.log('Redirecting to Google for authentication...');
+      // Google OAuth will redirect, so we don't need to do anything else
+    } else {
+      console.error('Google signup failed:', result.message);
+      setErrors({ general: result.message });
+      setIsLoading(false);
+    }
+  };
+
   const passwordReqs = formData.password ? validatePassword(formData.password) : {
     minLength: false,
     hasUppercase: false,
@@ -317,6 +333,25 @@ const Register = () => {
           disabled={isLoading}
         >
           {isLoading ? 'Creating Account...' : 'Create Account'}
+        </button>
+
+        <div className="divider">
+          <span>OR</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogleSignup}
+          className="btn btn-google"
+          disabled={isLoading}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" style={{ marginRight: '8px' }}>
+            <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+            <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2.04a4.8 4.8 0 0 1-7.18-2.53H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+            <path fill="#FBBC05" d="M4.5 10.49a4.8 4.8 0 0 1 0-3.07V5.35H1.83a8 8 0 0 0 0 7.18l2.67-2.04z"/>
+            <path fill="#EA4335" d="M8.98 4.72c1.16 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.35L4.5 7.42c.64-1.9 2.26-3.22 4.48-3.22z"/>
+          </svg>
+          {isLoading ? 'Connecting...' : 'Sign up with Google'}
         </button>
 
         <div className="register-footer">

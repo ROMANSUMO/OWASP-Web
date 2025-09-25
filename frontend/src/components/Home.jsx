@@ -22,9 +22,29 @@ const Home = () => {
           {user && (
             <div className="user-info-card">
               <h3>User Information</h3>
-              <p><strong>Username:</strong> {user.username}</p>
               <p><strong>Email:</strong> {user.email}</p>
-              <p><strong>Last Login:</strong> {currentTime}</p>
+              {user.user_metadata?.full_name && (
+                <p><strong>Name:</strong> {user.user_metadata.full_name}</p>
+              )}
+              {user.profile?.username && (
+                <p><strong>Username:</strong> {user.profile.username}</p>
+              )}
+              {user.user_metadata?.avatar_url && (
+                <div style={{ marginTop: '10px' }}>
+                  <img 
+                    src={user.user_metadata.avatar_url} 
+                    alt="Profile" 
+                    style={{ 
+                      width: '50px', 
+                      height: '50px', 
+                      borderRadius: '50%',
+                      border: '2px solid #ddd'
+                    }} 
+                  />
+                </div>
+              )}
+              <p><strong>Account Type:</strong> {user.app_metadata?.provider || 'Email'}</p>
+              <p><strong>Last Login:</strong> {new Date(user.last_sign_in_at || Date.now()).toLocaleString()}</p>
             </div>
           )}
         </div>
