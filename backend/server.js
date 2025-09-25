@@ -5,6 +5,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const timeout = require('connect-timeout');
 
 // Import security middleware
 const { 
@@ -56,16 +57,32 @@ const corsOptions = {
 };
 
 // Security Middleware (Applied First)
+app.use(timeout('60s')); // 1-minute timeout for all requests (DoS protection)
 app.use(helmetConfig); // Security headers
 app.use(generalLimiter); // General rate limiting
 app.use(speedLimiter); // Slow down repeated requests
+
+// Timeout error handler
+app.use((req, res, next) => {
+    if (!req.timedout) next();
+});
+
+// HTTPS enforcement for production
+app.use((req, res, next) => {
+    if (process.env.NODE_ENV === 'production' && !req.secure && req.get('x-forwarded-proto') !== 'https') {
+        console.log('🔒 Redirecting HTTP to HTTPS:', req.url);
+        return res.redirect(301, `https://${req.get('host')}${req.url}`);
+    }
+    next();
+});
+
 app.use(cors(corsOptions));
 app.use(requestLogger); // Advanced request logging
 app.use(morgan('combined')); // Request logging
 app.use(cookieParser()); // Parse cookies
 app.use(validateContentType); // Validate content type
-app.use(express.json({ limit: '10mb' })); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+app.use(express.json({ limit: '1mb' })); // Parse JSON bodies (reduced from 10mb for security)
+app.use(express.urlencoded({ extended: true, limit: '1mb' })); // Parse URL-encoded bodies
 
 // Session configuration
 app.use(session({
