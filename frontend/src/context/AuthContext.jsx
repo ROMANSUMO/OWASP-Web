@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase, AUTH_ERRORS } from '../lib/supabase';
 
 const AuthContext = createContext();
-
-const API_BASE_URL = 'http://localhost:3001/api';
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -18,125 +17,271 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check if user is logged in by calling the backend
-        checkAuthStatus();
+        // Get initial session
+        const getSession = async () => {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) throw error;
+                
+                if (session) {
+                    setUser(session.user);
+                    setIsAuthenticated(true);
+                    // Fetch user profile data
+                    await fetchUserProfile(session.user.id);
+                } else {
+                    setUser(null);
+                    setIsAuthenticated(false);
+                }
+            } catch (error) {
+                console.error('Error getting session:', error);
+                setUser(null);
+                setIsAuthenticated(false);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        getSession();
+
+        // Listen for auth state changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (event, session) => {
+                console.log('Auth state change:', event, session);
+                
+                if (session) {
+                    setUser(session.user);
+                    setIsAuthenticated(true);
+                    // Fetch user profile data when user signs in
+                    await fetchUserProfile(session.user.id);
+                } else {
+                    setUser(null);
+                    setIsAuthenticated(false);
+                }
+                setLoading(false);
+            }
+        );
+
+        return () => {
+            subscription?.unsubscribe();
+        };
     }, []);
 
-    const checkAuthStatus = async () => {
+    // Fetch user profile data from profiles table
+    const fetchUserProfile = async (userId) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/user`, {
-                method: 'GET',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            });
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
 
-            if (response.ok) {
-                const data = await response.json();
-                if (data.status === 'success') {
-                    setUser(data.data.user);
-                    setIsAuthenticated(true);
-                }
-            } else {
-                setIsAuthenticated(false);
-                setUser(null);
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+                console.error('Error fetching profile:', error);
+                return;
+            }
+
+            if (data) {
+                // Merge profile data with auth user data
+                setUser(prevUser => ({ ...prevUser, profile: data }));
             }
         } catch (error) {
-            console.error('Error checking auth status:', error);
-            setIsAuthenticated(false);
-            setUser(null);
-        } finally {
-            setLoading(false);
+            console.error('Error in fetchUserProfile:', error);
         }
     };
 
     const login = async (credentials) => {
         try {
-            console.log('Login attempt with:', credentials);
+            console.log('Login attempt with:', { email: credentials.email });
             
-            const response = await fetch(`${API_BASE_URL}/login`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email: credentials.email,
-                    password: credentials.password
-                }),
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: credentials.email,
+                password: credentials.password,
             });
 
-            const data = await response.json();
-
-            if (response.ok && data.status === 'success') {
-                setUser(data.data.user);
-                setIsAuthenticated(true);
-                return { success: true, message: data.message };
-            } else {
+            if (error) {
+                console.error('Login error:', error);
+                
+                let errorMessage = AUTH_ERRORS.NETWORK_ERROR;
+                if (error.message.includes('Invalid login credentials')) {
+                    errorMessage = AUTH_ERRORS.INVALID_CREDENTIALS;
+                } else if (error.message.includes('Email not confirmed')) {
+                    errorMessage = 'Please check your email and confirm your account';
+                } else {
+                    errorMessage = error.message;
+                }
+                
                 return { 
                     success: false, 
-                    message: data.message || 'Login failed',
-                    errors: data.data?.errors || []
+                    message: errorMessage,
+                    error: error
                 };
             }
+
+            if (data.user) {
+                console.log('Login successful:', data.user.email);
+                return { 
+                    success: true, 
+                    message: 'Login successful',
+                    user: data.user
+                };
+            }
+
+            return { success: false, message: 'Login failed' };
         } catch (error) {
-            console.error('Login error:', error);
-            return { success: false, message: 'Network error. Please try again.' };
+            console.error('Login exception:', error);
+            return { success: false, message: AUTH_ERRORS.NETWORK_ERROR };
         }
     };
 
     const register = async (userData) => {
         try {
-            console.log('Registration attempt with:', userData);
-            
-            const response = await fetch(`${API_BASE_URL}/register`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    username: userData.username,
-                    email: userData.email,
-                    password: userData.password,
-                    confirmPassword: userData.confirmPassword
-                }),
+            console.log('Registration attempt with:', { 
+                email: userData.email, 
+                username: userData.username 
             });
 
-            const data = await response.json();
-
-            if (response.ok && data.status === 'success') {
-                setUser(data.data.user);
-                setIsAuthenticated(true);
-                return { success: true, message: data.message };
-            } else {
-                return { 
-                    success: false, 
-                    message: data.message || 'Registration failed',
-                    errors: data.data?.errors || []
+            // Validate password match on frontend
+            if (userData.password !== userData.confirmPassword) {
+                return {
+                    success: false,
+                    message: 'Password confirmation does not match password',
+                    errors: [{ msg: 'Password confirmation does not match password' }]
                 };
             }
+
+            // Sign up with Supabase Auth
+            const { data, error } = await supabase.auth.signUp({
+                email: userData.email,
+                password: userData.password,
+                options: {
+                    data: {
+                        username: userData.username,
+                        display_name: userData.username,
+                    }
+                }
+            });
+
+            if (error) {
+                console.error('Registration error:', error);
+                
+                let errorMessage = AUTH_ERRORS.NETWORK_ERROR;
+                if (error.message.includes('User already registered')) {
+                    errorMessage = AUTH_ERRORS.EMAIL_IN_USE;
+                } else if (error.message.includes('Password should be')) {
+                    errorMessage = AUTH_ERRORS.WEAK_PASSWORD;
+                } else {
+                    errorMessage = error.message;
+                }
+                
+                return { 
+                    success: false, 
+                    message: errorMessage,
+                    error: error
+                };
+            }
+
+            if (data.user) {
+                console.log('Registration successful:', data.user.email);
+                
+                // Create profile record
+                await createUserProfile(data.user.id, userData.username);
+                
+                // Check if user needs email confirmation
+                if (!data.session) {
+                    return {
+                        success: true,
+                        message: 'Registration successful! Please check your email to confirm your account.',
+                        user: data.user,
+                        needsConfirmation: true
+                    };
+                }
+                
+                return { 
+                    success: true, 
+                    message: 'Registration successful',
+                    user: data.user
+                };
+            }
+
+            return { success: false, message: 'Registration failed' };
         } catch (error) {
-            console.error('Registration error:', error);
-            return { success: false, message: 'Network error. Please try again.' };
+            console.error('Registration exception:', error);
+            return { success: false, message: AUTH_ERRORS.NETWORK_ERROR };
+        }
+    };
+
+    // Create user profile in profiles table
+    const createUserProfile = async (userId, username) => {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .insert([
+                    {
+                        id: userId,
+                        username: username,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                    }
+                ])
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error creating profile:', error);
+                return;
+            }
+
+            console.log('Profile created successfully:', data);
+        } catch (error) {
+            console.error('Error in createUserProfile:', error);
         }
     };
 
     const logout = async () => {
         try {
-            await fetch(`${API_BASE_URL}/logout`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            });
+            console.log('Logout attempt');
+            
+            const { error } = await supabase.auth.signOut();
+            
+            if (error) {
+                console.error('Logout error:', error);
+            } else {
+                console.log('Logout successful');
+            }
+            
+            // State will be updated via onAuthStateChange listener
         } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            setUser(null);
-            setIsAuthenticated(false);
+            console.error('Logout exception:', error);
+        }
+    };
+
+    // Update user profile
+    const updateProfile = async (profileData) => {
+        try {
+            if (!user?.id) return { success: false, message: 'User not authenticated' };
+
+            const { data, error } = await supabase
+                .from('profiles')
+                .update({
+                    ...profileData,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', user.id)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Profile update error:', error);
+                return { success: false, message: error.message };
+            }
+
+            // Update local user state
+            setUser(prevUser => ({ ...prevUser, profile: data }));
+            
+            return { success: true, message: 'Profile updated successfully', data };
+        } catch (error) {
+            console.error('Profile update exception:', error);
+            return { success: false, message: 'Failed to update profile' };
         }
     };
 
@@ -146,7 +291,9 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         register,
-        logout
+        logout,
+        updateProfile,
+        fetchUserProfile
     };
 
     return (

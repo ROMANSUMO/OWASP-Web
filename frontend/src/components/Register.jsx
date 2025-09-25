@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import '../styles/Register.css';
@@ -14,8 +14,16 @@ const Register = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   
-  const { register } = useAuth();
+  const { register, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect to home if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      console.log('User is authenticated, redirecting to home...');
+      navigate('/home');
+    }
+  }, [isAuthenticated, authLoading, navigate]);
 
   // Email validation helper
   const validateEmail = (email) => {
@@ -113,57 +121,69 @@ const Register = () => {
     try {
       console.log('Registration form submitted:', formData);
       
-      // Call the register function from AuthContext
+      // Call the register function from AuthContext (Supabase)
       const result = await register({
-        username: formData.username,
         email: formData.email,
         password: formData.password,
-        confirmPassword: formData.confirmPassword
+        confirmPassword: formData.confirmPassword,
+        username: formData.username
       });
 
-      if (result && result.success) {
-        console.log('Registration successful, redirecting to home...');
-        navigate('/home');
-      } else {
-        console.error('Registration failed:', result?.message || 'Unknown error');
+      if (result.success) {
+        console.log('Registration successful!');
+        // Show success message - user needs to verify email
+        setErrors({ 
+          general: 'Registration successful! Please check your email to verify your account before signing in.' 
+        });
         
-        // Handle different types of errors
-        if (result && result.errors && Array.isArray(result.errors)) {
-          // Backend validation errors (array format)
-          const fieldErrors = {};
-          result.errors.forEach(error => {
-            if (error.field) {
-              fieldErrors[error.field] = error.msg || error.message;
-            }
-          });
+        // Clear form
+        setFormData({
+          username: '',
+          email: '',
+          password: '',
+          confirmPassword: ''
+        });
+        
+        // Redirect to login after a delay
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
+      } else {
+        console.error('Registration failed:', result.error);
+        
+        // Handle Supabase auth errors
+        let errorMessage = 'Registration failed. Please try again.';
+        
+        if (result.error?.message) {
+          // Map common Supabase errors to user-friendly messages
+          const message = result.error.message.toLowerCase();
           
-          if (Object.keys(fieldErrors).length > 0) {
-            setErrors(fieldErrors);
+          if (message.includes('email')) {
+            if (message.includes('already')) {
+              errorMessage = 'An account with this email already exists. Please use a different email or try logging in.';
+            } else if (message.includes('invalid')) {
+              errorMessage = 'Please enter a valid email address.';
+            } else {
+              errorMessage = result.error.message;
+            }
+          } else if (message.includes('password')) {
+            if (message.includes('weak') || message.includes('short')) {
+              errorMessage = 'Password is too weak. Please use at least 8 characters with uppercase, lowercase, and numbers.';
+            } else {
+              errorMessage = result.error.message;
+            }
           } else {
-            setErrors({ general: result.message || 'Registration failed. Please try again.' });
+            errorMessage = result.error.message;
           }
-        } else {
-          // General error message
-          setErrors({ 
-            general: result?.message || 'Registration failed. Please try again.' 
-          });
         }
+        
+        setErrors({ general: errorMessage });
       }
     } catch (error) {
       console.error('Registration error:', error);
-      
-      // Handle network or other errors
-      if (error.response) {
-        // API responded with error status
-        const errorMessage = error.response.data?.message || 'Registration failed. Please try again.';
-        setErrors({ general: errorMessage });
-      } else if (error.request) {
-        // Network error
-        setErrors({ general: 'Network error. Please check your connection and try again.' });
-      } else {
-        // Other error
-        setErrors({ general: 'An unexpected error occurred. Please try again.' });
-      }
+      setErrors({ 
+        general: 'An unexpected error occurred. Please try again.' 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +202,10 @@ const Register = () => {
         <h2 className="register-title">Create Account</h2>
         
         {errors.general && (
-          <div className="error-message" style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <div 
+            className={`error-message ${errors.general.includes('successful') ? 'success-message' : ''}`} 
+            style={{ textAlign: 'center', marginBottom: '20px' }}
+          >
             {errors.general}
           </div>
         )}

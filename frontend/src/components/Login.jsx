@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import '../styles/Login.css';
@@ -12,8 +12,16 @@ const Login = () => {
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState([]);
 
-  const { login } = useAuth();
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect to home if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      console.log('User is authenticated, redirecting to home...');
+      navigate('/home');
+    }
+  }, [isAuthenticated, authLoading, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,8 +46,8 @@ const Login = () => {
     const result = await login(formData);
 
     if (result.success) {
-      console.log('Login successful, redirecting to home...');
-      navigate('/home');
+      console.log('Login successful! Auth state will update and redirect automatically.');
+      // The useEffect will handle redirection when isAuthenticated becomes true
     } else {
       console.error('Login failed:', result.message);
       setError(result.message);
@@ -122,11 +130,9 @@ const Login = () => {
           </Link>
         </div>
         
-        <div className="demo-credentials">
-          <h4>Demo Credentials:</h4>
-          <p><strong>Email:</strong> admin@example.com</p>
-          <p><strong>Password:</strong> password123</p>
-          <p><em>Or use: test@example.com / password123</em></p>
+        <div className="demo-info">
+          <h4>🚀 Now powered by Supabase!</h4>
+          <p><em>Secure authentication & database in the cloud</em></p>
         </div>
       </form>
     </div>
