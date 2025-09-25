@@ -53,6 +53,11 @@ export const AuthProvider = ({ children }) => {
                     setIsAuthenticated(true);
                     // Fetch user profile data when user signs in
                     await fetchUserProfile(session.user.id);
+                    
+                    // Create profile if it doesn't exist (for OAuth sign-ins)
+                    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                        await ensureUserProfile(session.user);
+                    }
                 } else {
                     setUser(null);
                     setIsAuthenticated(false);
@@ -237,6 +242,37 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Ensure user profile exists (for OAuth sign-ins)
+    const ensureUserProfile = async (user) => {
+        try {
+            // Check if profile exists
+            const { data: existingProfile, error: fetchError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+
+            if (fetchError && fetchError.code === 'PGRST116') {
+                // Profile doesn't exist, create it
+                console.log('Creating profile for OAuth user:', user.id);
+                
+                // Extract username from user metadata or email
+                const username = user.user_metadata?.name || 
+                                user.user_metadata?.full_name || 
+                                user.email?.split('@')[0] || 
+                                `user_${user.id.slice(0, 8)}`;
+                
+                await createUserProfile(user.id, username);
+            } else if (fetchError) {
+                console.error('Error checking profile:', fetchError);
+            } else {
+                console.log('Profile already exists for user:', user.id);
+            }
+        } catch (error) {
+            console.error('Error in ensureUserProfile:', error);
+        }
+    };
+
     const logout = async () => {
         try {
             console.log('Logout attempt');
@@ -285,6 +321,37 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Google OAuth sign-in
+    const signInWithGoogle = async () => {
+        try {
+            console.log('Google sign-in attempt');
+            
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/home`
+                }
+            });
+
+            if (error) {
+                console.error('Google sign-in error:', error);
+                return { 
+                    success: false, 
+                    message: error.message,
+                    error: error
+                };
+            }
+
+            return { 
+                success: true, 
+                message: 'Redirecting to Google...'
+            };
+        } catch (error) {
+            console.error('Google sign-in exception:', error);
+            return { success: false, message: AUTH_ERRORS.NETWORK_ERROR };
+        }
+    };
+
     const value = {
         isAuthenticated,
         user,
@@ -293,7 +360,8 @@ export const AuthProvider = ({ children }) => {
         register,
         logout,
         updateProfile,
-        fetchUserProfile
+        fetchUserProfile,
+        signInWithGoogle
     };
 
     return (
