@@ -119,22 +119,21 @@ const helmetConfig = helmet({
         directives: {
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", process.env.SUPABASE_URL || "", "https:"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "http:", "https:"],
+            connectSrc: ["'self'", process.env.SUPABASE_URL || "", "http:", "https:"],
             fontSrc: ["'self'"],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             frameSrc: ["'none'"],
         },
     },
-    crossOriginEmbedderPolicy: false, // Allow embedding for development
-    hsts: {
-        maxAge: 31536000, // 1 year
-        includeSubDomains: true,
-        preload: true
-    },
-    forceHTTPSRedirect: process.env.NODE_ENV === 'production'
+    crossOriginEmbedderPolicy: false, // Disable for HTTP
+    crossOriginOpenerPolicy: false, // Disable problematic header for HTTP
+    crossOriginResourcePolicy: false, // Disable for HTTP
+    originAgentCluster: false, // Disable Origin-Agent-Cluster header
+    hsts: false, // Disable HSTS for HTTP
+    forceHTTPSRedirect: false // Never redirect to HTTPS
 });
 
 // Input sanitization middleware
