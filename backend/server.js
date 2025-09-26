@@ -16,7 +16,8 @@ const {
     speedLimiter,
     sanitizeInput,
     securityLogger,
-    validateContentType
+    validateContentType,
+    threatDetection
 } = require('./middleware/security');
 
 const { logger, requestLogger, errorLogger } = require('./middleware/logger');
@@ -58,6 +59,7 @@ const corsOptions = {
 
 // Security Middleware (Applied First)
 app.use(helmetConfig); // Security headers
+app.use(threatDetection); // Threat detection (before rate limiting)
 app.use(generalLimiter); // General rate limiting
 app.use(speedLimiter); // Slow down repeated requests
 app.use(cors(corsOptions));
@@ -74,10 +76,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, // Set to true in production with HTTPS
+        secure: process.env.NODE_ENV === 'production', // HTTPS in production
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'lax' // CSRF protection
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax' // Stricter in production
     },
     name: 'websecurity.sid' // Custom session name
 }));

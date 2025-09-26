@@ -211,10 +211,7 @@ const Login = () => {
           </Link>
         </div>
         
-        <div className="demo-info">
-          <h4>🚀 Now powered by Supabase!</h4>
-          <p><em>Secure authentication & database in the cloud</em></p>
-        </div>
+
       </form>
     </div>
   );

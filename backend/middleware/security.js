@@ -9,6 +9,22 @@ const { JSDOM } = require('jsdom');
 const window = new JSDOM('').window;
 const DOMPurify = createDOMPurify(window);
 
+// Suspicious path detection for security monitoring
+const isSuspiciousPath = (path) => {
+    const suspiciousPaths = [
+        '.env', '.htaccess', 'config', '.git', '.svn', 'cvs', 'backup',
+        'admin', 'administrator', 'wp-admin', 'phpmyadmin', 'adminer',
+        'phpinfo', 'server-status', 'server-info', 'trace.axd', 'elmah',
+        '.ssh/', 'id_rsa', 'id_dsa', '.key', '.pem', 'privatekey',
+        'database.yml', 'databases.yml', 'wp-config', 'configuration.php',
+        'filezilla', 'winscp', 'sftp-config', 'composer.', 'package.json',
+        'actuator/', 'health', 'metrics', 'dump', 'debug', 'test.php'
+    ];
+    
+    const pathLower = path.toLowerCase();
+    return suspiciousPaths.some(suspicious => pathLower.includes(suspicious));
+};
+
 // XSS Protection Configuration
 const xssOptions = {
     whiteList: {
@@ -28,7 +44,7 @@ const xssOptions = {
 };
 
 // Rate Limiting Configuration
-const createRateLimit = (windowMs, max, message) => {
+const createRateLimit = (windowMs, max, message, skipPaths = []) => {
     return rateLimit({
         windowMs,
         max,
@@ -39,8 +55,21 @@ const createRateLimit = (windowMs, max, message) => {
         },
         standardHeaders: true,
         legacyHeaders: false,
+        skip: (req, res) => {
+            // Skip rate limiting for static assets and certain paths
+            const path = req.originalUrl.toLowerCase();
+            return skipPaths.some(skipPath => path.includes(skipPath));
+        },
         handler: (req, res) => {
-            console.log(`🚨 Rate limit exceeded for IP: ${req.ip} on ${req.originalUrl}`);
+            const path = req.originalUrl;
+            const isSuspicious = isSuspiciousPath(path);
+            
+            if (isSuspicious) {
+                console.log(`🚨 SECURITY ALERT: Potential attack detected from IP: ${req.ip} on ${path}`);
+            } else {
+                console.log(`🚨 Rate limit exceeded for IP: ${req.ip} on ${path}`);
+            }
+            
             res.status(429).json({
                 status: 'error',
                 message,
@@ -50,11 +79,12 @@ const createRateLimit = (windowMs, max, message) => {
     });
 };
 
-// General API rate limiting
+// General API rate limiting (exclude static assets)
 const generalLimiter = createRateLimit(
     15 * 60 * 1000, // 15 minutes
     100, // 100 requests per 15 minutes
-    'Too many requests from this IP, please try again later'
+    'Too many requests from this IP, please try again later',
+    ['/assets/', '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.woff', '.woff2', '.ttf', '.eot']
 );
 
 // Strict rate limiting for auth endpoints
@@ -91,14 +121,20 @@ const helmetConfig = helmet({
             styleSrc: ["'self'", "'unsafe-inline'"],
             scriptSrc: ["'self'"],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", process.env.SUPABASE_URL || ""],
+            connectSrc: ["'self'", process.env.SUPABASE_URL || "", "https:"],
             fontSrc: ["'self'"],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             frameSrc: ["'none'"],
         },
     },
-    crossOriginEmbedderPolicy: false // Allow embedding for development
+    crossOriginEmbedderPolicy: false, // Allow embedding for development
+    hsts: {
+        maxAge: 31536000, // 1 year
+        includeSubDomains: true,
+        preload: true
+    },
+    forceHTTPSRedirect: process.env.NODE_ENV === 'production'
 });
 
 // Input sanitization middleware
@@ -191,6 +227,38 @@ const validateContentType = (req, res, next) => {
     next();
 };
 
+// Security threat detection middleware
+const threatDetection = (req, res, next) => {
+    const path = req.originalUrl;
+    const userAgent = req.get('User-Agent') || '';
+    const ip = req.ip;
+    
+    if (isSuspiciousPath(path)) {
+        console.log('🚨 THREAT DETECTED:', {
+            type: 'Suspicious Path Access',
+            path: path,
+            ip: ip,
+            userAgent: userAgent.substring(0, 200), // Limit length
+            timestamp: new Date().toISOString(),
+            method: req.method
+        });
+        
+        // You could add additional actions here:
+        // - Log to security file
+        // - Send alert to monitoring system  
+        // - Block IP temporarily
+        // - Return 404 instead of 429 to avoid revealing information
+        
+        return res.status(404).json({
+            status: 'error',
+            message: 'Not found',
+            data: null
+        });
+    }
+    
+    next();
+};
+
 module.exports = {
     helmetConfig,
     generalLimiter,
@@ -200,6 +268,7 @@ module.exports = {
     sanitizeInput,
     securityLogger,
     validateContentType,
+    threatDetection,
     xss: (input) => xss(input, xssOptions),
     domPurify: (input) => DOMPurify.sanitize(input)
 };
