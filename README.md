@@ -1,182 +1,400 @@
-# WebSecurity - Full-Stack OWASP Security Application
+# WebSecurity — Full‑Stack OWASP Security Application (Supabase)
 
-A modern, secure full-stack web application demonstrating OWASP security best practices with Supabase authentication. This project showcases enterprise-level security implementations including authentication, authorization, input sanitization, CSRF protection, and comprehensive security monitoring.
+> Production‑ready template that demonstrates OWASP Top‑10 controls with Supabase Auth, strict RLS, CSP, input sanitization, and security monitoring.
 
-## Features
+## TL;DR
 
-### 🔐 Authentication System (Supabase-Powered)
-- Secure user registration with email verification
-- JWT-based authentication with Supabase Auth
-- Google OAuth integration for social login
-- Password strength validation and security requirements
-- Protected routes with automatic session management
-- Profile management and user data synchronization
+* **Frontend:** React 19 + Vite + React Router + Context
+* **Backend:** Supabase (Postgres, Auth, Storage, Edge Functions)
+* **Auth:** Email/password, Email OTP, Google OAuth, session sync
+* **Data Security:** Row‑Level Security (RLS) with owner/role policies
+* **AppSec:** XSS hardening (DOMPurify), CSP, rate limiting, CSRF (only if cookies used), secure headers at edge
+* **Monitoring:** Supabase logs + optional Sentry; ZAP baseline in CI
 
-### 🛡️ Security Features
-- **OWASP Compliance**: Follows OWASP Top 10 security guidelines
-- **Input Sanitization**: XSS protection with DOMPurify and XSS library
-- **CSRF Protection**: Custom token-based CSRF implementation
-- **Rate Limiting**: Multi-tier rate limiting (general, auth, registration)
-- **Security Headers**: Comprehensive Helmet.js configuration
-- **SQL Injection Prevention**: Parameterized queries via Supabase
-- **Session Security**: Secure cookie configuration and session management
-- **Content Security Policy**: Strict CSP headers for XSS prevention
 
-### 🧭 Navigation & Routing
-- React Router for single-page application navigation
-- Dynamic navigation bar that changes based on authentication state
-- Protected routes using HOC pattern
-- Default route redirection logic
 
-### 📱 Responsive Design
-- Mobile-first responsive design
-- Clean, modern UI with CSS-only styling
-- Optimized for desktop, tablet, and mobile devices
-- Accessible form design with proper labels and validation
+## 1) Features
 
-### 🎨 User Interface
-- **Login Page**: Username/email and password authentication
-- **Register Page**: Complete registration form with validation
-- **Home Page**: User dashboard with welcome message and feature cards
-- **Navigation Bar**: Dynamic navigation based on authentication state
+### 1.1 Authentication (Supabase‑Powered)
 
-## Project Structure
+* Email/password with strength gate and server‑enforced policies
+* Email verification & OTP flows
+* Google OAuth via Supabase Provider
+* Session management with `onAuthStateChange`
+* Profile sync table with RLS (owner‑only reads/writes)
+
+### 1.2 Security Controls
+
+* **OWASP Coverage:** A01…A10 mapped (see §11)
+* **XSS Protection:** DOMPurify for any untrusted HTML; React escapes by default
+* **CSP:** Strict default‑src 'self'; allowlists for Supabase domains
+* **CSRF:** *Only required for cookie‑based auth.* With Authorization header JWT, CSRF risk is minimal. Optional double‑submit token shown
+* **Rate Limiting:** Supabase Edge Function example using Deno KV/Redis
+* **RLS & SQLi:** Parameterized queries via Supabase client; RLS blocks cross‑tenant access
+* **Secure Storage:** Private buckets with signed URLs
+* **Secret Hygiene:** Environment scoping with Vite `VITE_` prefix; no secrets in code
+
+### 1.3 UI/UX
+
+* Responsive, accessible forms and navigation
+* Protected routes via HOC/Wrapper + context
+* Clear error messages without leaking internals
+
+---
+
+## 2) Architecture
+
+```mermaid
+flowchart LR
+  A[Browser SPA\nReact 19 + Vite] -->|supabase-js| B[(Supabase Auth)]
+  A -->|RPC/SQL\nRLS enforced| C[(Supabase Postgres)]
+  A -->|Storage SDK\nSigned URLs| D[(Supabase Storage)]
+  A -->|fetch| E[Edge Functions\nRate limit, CSRF verify]
+  subgraph Security
+  F[CSP/Headers at Edge]
+  G[DOMPurify]
+  H[RLS Policies]
+  end
+  A --> F
+  A --> G
+  C --> H
+```
+
+**Model:** SPA talks directly to Supabase. No custom server needed. If you adopt cookie‑based auth later, put headers, CSRF, and rate limiting at the edge or a tiny BFF.
+
+---
+
+## 3) Project Structure
 
 ```
 src/
-├── components/
-│   ├── Home.jsx           # Dashboard/home page component
-│   ├── Login.jsx          # Login form component
-│   ├── Navbar.jsx         # Navigation bar component
-│   ├── ProtectedRoute.jsx # Route protection HOC
-│   └── Register.jsx       # Registration form component
-├── context/
-│   └── AuthContext.jsx    # Authentication context provider
-├── styles/
-│   ├── global.css         # Global styles and utilities
-│   ├── Home.css          # Home page specific styles
-│   ├── Login.css         # Login page specific styles
-│   ├── Navbar.css        # Navigation bar styles
-│   └── Register.css      # Registration page styles
-├── App.jsx               # Main application component
-├── main.jsx             # Application entry point
-└── index.css            # Base CSS reset and root styles
+  components/
+    Home.jsx
+    Login.jsx
+    Navbar.jsx
+    ProtectedRoute.jsx
+    Register.jsx
+  context/
+    AuthContext.jsx
+  lib/
+    supabaseClient.js
+    security/csp.js            # hosting examples
+    security/domPurify.js      # sanitizer wrapper
+  styles/
+    global.css
+    Home.css
+    Login.css
+    Navbar.css
+    Register.css
+  App.jsx
+  main.jsx
+index.css
 ```
 
-## Installation & Setup
+---
 
-1. **Clone or download the project**
-   ```bash
-   cd WebSecurity
-   ```
+## 4) Setup
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### 4.1 Prerequisites
 
-3. **Start the development server**
-   ```bash
-   npm run dev
-   ```
+* Node 18+
+* Supabase project (free tier OK)
 
-4. **Open in browser**
-   Navigate to `http://localhost:5173` (or the port shown in terminal)
+### 4.2 Supabase Config
 
-## Form Validation
+1. Create project → copy **Project URL** and **anon key**
+2. Enable **Email** and **Google** providers (Authentication → Providers)
+3. Create **profiles** table (see §6) and enable RLS
 
-### Login Form
-- Username/email field validation
-- Password minimum length requirement
-- Real-time error display
+### 4.3 Environment
 
-### Registration Form
-- Username validation (alphanumeric + underscores only)
-- Email format validation
-- Password strength requirements:
-  - Minimum 8 characters
-  - At least one uppercase letter
-  - At least one lowercase letter
-  - At least one number
-- Confirm password matching
-- Real-time validation feedback
+Create `.env`:
 
-## Authentication Flow
+```
+VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+```
 
-1. **Default Route**: Redirects to login if not authenticated, home if authenticated
-2. **Login**: Mock authentication sets user state and redirects to home
-3. **Register**: Mock registration creates user and auto-logs them in
-4. **Protected Routes**: Automatically redirect to login if not authenticated
-5. **Logout**: Clears user state and redirects to login
+### 4.4 Run
 
-## Mock Authentication
+```bash
+npm install
+npm run dev
+# open http://localhost:5173
+```
 
-Currently uses client-side mock authentication for demonstration:
-- Login accepts any username/password combination
-- Registration creates a mock user session
-- User state persists during the session
-- No backend API calls are made (ready for integration)
+---
 
-## CSS Architecture
+## 5) Auth Integration (supabase-js)
 
-- **Modular CSS**: Each component has its own CSS file
-- **Global Styles**: Common utilities and base styles
-- **Responsive Design**: Mobile-first approach with breakpoints
-- **Modern CSS**: Uses Flexbox, Grid, and CSS transitions
-- **No CSS Frameworks**: Pure CSS implementation for learning
+**`src/lib/supabaseClient.js`**
 
-## Browser Support
+```js
+import { createClient } from '@supabase/supabase-js'
+export const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  { auth: { persistSession: true, autoRefreshToken: true } }
+)
+```
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
-- Mobile browsers (iOS Safari, Chrome Mobile)
+**Register**
 
-## Available Scripts
+```js
+await supabase.auth.signUp({
+  email, password,
+  options: { data: { username }, emailRedirectTo: window.location.origin }
+})
+```
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
+**Login**
 
-## Future Enhancements
+```js
+const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+```
 
-- [ ] Backend API integration
-- [ ] Real JWT token authentication
-- [ ] Password reset functionality
-- [ ] Remember me option
-- [ ] User profile management
-- [ ] Dashboard data from API
-- [ ] Dark mode theme
-- [ ] Multi-language support
+**Google OAuth**
 
-## Technologies Used
+```js
+await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
+```
 
-- **React 19** - Frontend framework
-- **React Router** - Client-side routing
-- **React Context** - State management
-- **Vite** - Build tool and dev server
-- **Pure CSS** - Styling (no frameworks)
-- **ESLint** - Code linting
+**Session Listener**
 
-## Development Notes
+```js
+supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
+```
 
-This application is built with modern React patterns and hooks. The authentication system is designed to be easily replaceable with a real backend API. All form submissions currently use console.log for debugging but are structured to easily integrate with HTTP requests.
+---
 
-The styling is purposefully done with vanilla CSS to demonstrate CSS skills and maintain full control over the design without external dependencies.+ Vite
+## 6) Database + RLS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**profiles table**
 
-Currently, two official plugins are available:
+```sql
+create table if not exists public.profiles (
+  id uuid primary key references auth.users on delete cascade,
+  username text unique,
+  full_name text,
+  created_at timestamp with time zone default now()
+);
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+alter table public.profiles enable row level security;
 
-## React Compiler
+-- Owner can select/update own row
+create policy "profiles_owner_select" on public.profiles
+for select using (auth.uid() = id);
 
-The React Compiler is not enabled on this template. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+create policy "profiles_owner_update" on public.profiles
+for update using (auth.uid() = id);
 
-## Expanding the ESLint configuration
+-- Insert only self
+create policy "profiles_self_insert" on public.profiles
+for insert with check (auth.uid() = id);
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+**Auto‑provision profile** (optional trigger)
+
+```sql
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, username)
+  values (new.id, split_part(new.email, '@', 1));
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+```
+
+---
+
+## 7) Protected Routes (React Router)
+
+**`ProtectedRoute.jsx`**
+
+```jsx
+import { useAuth } from '../context/AuthContext'
+import { Navigate } from 'react-router-dom'
+
+export default function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  return user ? children : <Navigate to="/login" replace />
+}
+```
+
+---
+
+## 8) Input Sanitization (XSS)
+
+**Wrapper**
+
+```js
+import DOMPurify from 'dompurify'
+export const sanitize = (dirty) => DOMPurify.sanitize(dirty, { USE_PROFILES: { html: true } })
+```
+
+**Usage**
+
+```jsx
+<div dangerouslySetInnerHTML={{ __html: sanitize(userContent) }} />
+```
+
+---
+
+## 9) CSRF Strategy
+
+* If you **use Authorization header JWT** from `supabase-js` (default), **CSRF is not applicable** because cookies are not sent automatically by the browser.
+* If you switch to **cookie‑based auth** (BFF/edge), implement **double‑submit token**:
+
+  * Set `csrf_token` cookie (SameSite=Strict, HttpOnly=false) and send the same value in a custom header `x-csrf-token`.
+  * Server verifies equality for state‑changing requests.
+
+**Edge example (pseudo‑Deno)**
+
+```ts
+const token = req.headers.get('x-csrf-token')
+const cookie = cookies.get('csrf_token')
+if (req.method !== 'GET' && token !== cookie) return new Response('Forbidden', { status: 403 })
+```
+
+---
+
+## 10) Content Security Policy (CSP)
+
+Set at your host (Netlify `_headers`, Vercel, Cloudflare):
+
+```
+/*
+  Content-Security-Policy: default-src 'self'; connect-src 'self' https://*.supabase.co; img-src 'self' data: https://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+```
+
+Adjust if you embed third‑party assets.
+
+---
+
+## 11) OWASP Mapping (ASVS Lite)
+
+| Risk                       | Mitigation                                                |
+| -------------------------- | --------------------------------------------------------- |
+| A01 Broken Access Control  | RLS owner policies; ProtectedRoute; no client‑trust       |
+| A02 Cryptographic Failures | TLS only; Supabase managed; no plaintext secrets          |
+| A03 Injection              | Parameterized calls via supabase‑js; no string SQL        |
+| A04 Insecure Design        | Minimal attack surface; BFF optional; threat model in §16 |
+| A05 Security Misconfig     | CSP, headers, environment separation                      |
+| A06 Vulnerable Components  | `npm audit` + Dependabot; lockfile in CI                  |
+| A07 Auth/Z Failures        | Supabase sessions, email verification, OAuth              |
+| A08 Data Integrity         | Signed URLs; least‑privilege RLS                          |
+| A09 Logging/Monitoring     | Supabase logs; optional Sentry breadcrumbs                |
+| A10 SSRF                   | SPA only; no server‑side fetch exposed                    |
+
+---
+
+## 12) Rate Limiting (Edge Function)
+
+**`functions/ratelimit/index.ts`** (concept)
+
+```ts
+// Use Deno KV or Upstash Redis
+const key = `${clientIp}:${route}`
+const hits = await kv.get(key) || 0
+if (hits > 60) return new Response('Too Many Requests', { status: 429 })
+await kv.set(key, hits + 1, { expireIn: 60 })
+```
+
+Attach before sensitive endpoints like `/register`.
+
+---
+
+## 13) Storage Security
+
+* Private buckets by default
+* Generate signed URLs client‑side for limited time
+
+```js
+const { data } = await supabase.storage.from('private').createSignedUrl(path, 60)
+```
+
+---
+
+## 14) Linting + Dependency Policy
+
+* ESLint included; add `eslint-plugin-security`
+* Pin versions; run `npm audit --production`
+* CI blocks on critical vulns
+
+---
+
+## 15) CI/CD Security
+
+**GitHub Actions: ZAP Baseline**
+
+```yaml
+name: security-scan
+on: [push]
+jobs:
+  zap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: zaproxy/action-baseline@v0.11.0
+        with:
+          target: 'https://preview.yourapp.com'
+```
+
+Add build, unit tests, and lint steps.
+
+---
+
+## 16) Threat Model (STRIDE)
+
+| Threat          | Example             | Control                           |
+| --------------- | ------------------- | --------------------------------- |
+| Spoofing        | Fake sessions       | Supabase JWT + verification       |
+| Tampering       | Cross‑tenant writes | RLS owner checks                  |
+| Repudiation     | Missing audit       | Supabase logs                     |
+| Info Disclosure | Public bucket       | Private buckets + signed URLs     |
+| DoS             | Registration spam   | Rate limiting + CAPTCHA if needed |
+| Elevation       | IDOR                | RLS, never trust client IDs       |
+
+---
+
+## 17) Testing Checklist
+
+* Auth: register/login/logout, email verify, OAuth
+* RLS: try reading/updating other users’ profiles
+* XSS: attempt `<img src=x onerror=alert(1)>` in any user field
+* CSP: check console for blocked origins; tighten allowlists
+* Rate Limit: exceed thresholds; expect 429
+* ZAP: baseline scan clean
+
+---
+
+## 18) Developer Notes
+
+* Keep logic in React; avoid server where possible
+* If you adopt a BFF: add Helmet, cookie flags, CSRF tokens, and reverse proxy only to Supabase
+
+---
+
+## 19) Roadmap
+
+* Password reset + magic links
+* Remember‑me and reauth prompts
+* Profile CRUD with avatar upload (signed URLs)
+* Dark mode and i18n
+* Sentry monitoring + robust error boundaries
+
+---
+
+## 20) License
+
+Add your chosen license.
