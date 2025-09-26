@@ -138,7 +138,22 @@ app.use('/api', supabaseAuthRoutes); // Supabase authentication routes
 const frontendDistPath = path.join(__dirname, '../frontend/dist');
 if (fs.existsSync(frontendDistPath)) {
     console.log('📁 Serving static frontend files from:', frontendDistPath);
-    app.use(express.static(frontendDistPath));
+    
+    // Middleware to ensure HTTP protocol for assets
+    app.use((req, res, next) => {
+        // Force HTTP protocol for all asset requests
+        res.setHeader('Content-Security-Policy', "upgrade-insecure-requests"); 
+        res.removeHeader('Content-Security-Policy'); // Remove to prevent HTTPS forcing
+        next();
+    });
+    
+    app.use(express.static(frontendDistPath, {
+        setHeaders: (res, path) => {
+            // Ensure no HTTPS forcing headers for static assets
+            res.removeHeader('Strict-Transport-Security');
+            res.setHeader('Cache-Control', 'public, max-age=31536000');
+        }
+    }));
     
     // Handle React Router - serve index.html for all non-API routes
     app.get('*', (req, res) => {

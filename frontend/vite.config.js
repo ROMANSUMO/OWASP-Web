@@ -7,11 +7,24 @@ export default defineConfig({
   base: '/',
   server: {
     host: true,
-    port: 5173
+    port: 5173,
+    https: false
+  },
+  preview: {
+    https: false,
+    port: 4173
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
+  },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production')
   }
 })
