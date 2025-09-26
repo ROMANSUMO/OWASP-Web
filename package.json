@@ -1,4 +1,19 @@
 {
+  "name": "websecurity-fullstack",
+  "version": "1.0.0",
+  "description": "WebSecurity application with React frontend and Node.js backend, powered by Supabase",
+  "scripts": {
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "build:serve": "npm run build && npm start",
+    "install:all": "cd frontend && npm install && cd ../backend && npm install",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev"
+  },
+  "keywords": ["react", "node.js", "express", "supabase", "authentication"],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "dompurify": "^3.2.7"
   }

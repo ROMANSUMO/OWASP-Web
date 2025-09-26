@@ -5,6 +5,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const fs = require('fs');
 
 // Import security middleware
 const { 
@@ -44,9 +45,11 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
   });
 }
 
-// CORS configuration
+// CORS configuration - Updated for single server deployment
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.NODE_ENV === 'production' 
+        ? process.env.PRODUCTION_URL || `http://localhost:${PORT}`
+        : [`http://localhost:${PORT}`, 'http://localhost:3000', 'http://localhost:5173'],
     credentials: true, // Allow credentials (cookies, sessions)
     optionsSuccessStatus: 200,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -129,21 +132,47 @@ app.use(['/api/register', '/api/login', '/api/logout'], verifyCSRFToken);
 
 app.use('/api', supabaseAuthRoutes); // Supabase authentication routes
 
-// 404 handler for unknown routes
-app.use('/api/*', (req, res) => {
-    console.log('❌ Route not found:', req.originalUrl);
-    logger.warn('Route not found', { 
-        url: req.originalUrl, 
-        method: req.method,
-        ip: req.ip,
-        userAgent: req.get('User-Agent')
+// Serve static files from React build (Production)
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+    console.log('📁 Serving static frontend files from:', frontendDistPath);
+    app.use(express.static(frontendDistPath));
+    
+    // Handle React Router - serve index.html for all non-API routes
+    app.get('*', (req, res) => {
+        // Skip API routes
+        if (req.path.startsWith('/api/')) {
+            return res.status(404).json({
+                status: 'error',
+                message: `API route ${req.originalUrl} not found`,
+                data: null
+            });
+        }
+        
+        console.log('🎯 Serving React app for route:', req.path);
+        res.sendFile(path.join(frontendDistPath, 'index.html'));
     });
-    res.status(404).json({
-        status: 'error',
-        message: `Route ${req.originalUrl} not found`,
-        data: null
+} else {
+    console.log('⚠️  Frontend build not found at:', frontendDistPath);
+    console.log('   Run "npm run build:frontend" to build the React app');
+    
+    // Fallback route for development
+    app.get('*', (req, res) => {
+        if (req.path.startsWith('/api/')) {
+            return res.status(404).json({
+                status: 'error',
+                message: `API route ${req.originalUrl} not found`,
+                data: null
+            });
+        }
+        
+        res.status(503).json({
+            status: 'error',
+            message: 'Frontend not built. Please run "npm run build:frontend" first.',
+            data: { buildPath: frontendDistPath }
+        });
     });
-});
+}
 
 // Global error handling middleware
 app.use(errorLogger); // Log all errors
@@ -187,10 +216,12 @@ process.on('SIGTERM', () => {
 
 // Start server
 app.listen(PORT, () => {
-    console.log('✅ WebSecurity Backend Server running on:', `http://localhost:${PORT}`);
-    console.log('🌐 CORS enabled for:', process.env.FRONTEND_URL || 'http://localhost:3000');
+    console.log('✅ WebSecurity Server running on:', `http://localhost:${PORT}`);
+    console.log('� Frontend served from:', fs.existsSync(frontendDistPath) ? 'Built React app (dist/)' : 'Not built - run npm run build:frontend');
+    console.log('🌐 CORS enabled for:', corsOptions.origin);
     console.log('🔐 Session secret:', process.env.SESSION_SECRET ? 'Configured' : 'Using fallback');
-    console.log('📊 API endpoints available:');
+    console.log('📊 Available endpoints:');
+    console.log('   GET  /                     - React application (frontend)');
     console.log('   GET  /api/health           - Health check');
     console.log('   GET  /api/supabase-health  - Supabase connection check');
     console.log('   GET  /api/csrf-token       - CSRF token retrieval');
@@ -202,8 +233,9 @@ app.listen(PORT, () => {
     console.log('   PUT  /api/profile          - Update user profile');
     console.log('   POST /api/logout           - User logout');
     console.log('   ');
-    console.log('🔥 Server ready for connections!');
-    console.log('💡 All authentication powered by Supabase - secure cloud backend!');
+    console.log('🔥 Single server deployment ready!');
+    console.log('💡 Frontend + Backend served from one server - powered by Supabase!');
+    console.log('🚀 Open your browser to: http://localhost:' + PORT);
 });
 
 module.exports = app;
