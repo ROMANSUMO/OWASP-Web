@@ -392,9 +392,3 @@ Add build, unit tests, and lint steps.
 * Profile CRUD with avatar upload (signed URLs)
 * Dark mode and i18n
 * Sentry monitoring + robust error boundaries
-
----
-
-## 20) License
-
-Add your chosen license.
